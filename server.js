@@ -1,11 +1,3 @@
-/*
-  This Script Made by ArkRega
-  SMTP API Server Middleman
-  Telegram : @RegaAsAlways & @RegaStayStill
-  Telegram Channel : @MYGGWP
-  Updated: Laporan Telegram menggunakan HTML + hiasan
-*/
-
 const express = require('express')
 const nodemailer = require('nodemailer')
 const axios = require('axios')
@@ -83,8 +75,8 @@ app.post('/api/send', async (req, res) => {
 
   try {
     let smtpHost = 'smtp.gmail.com'
-    if (userEmail.includes('@arkrega.web.id')) {
-      smtpHost = 'mail.arkrega.web.id'
+    if (!userEmail.endsWith('@gmail.com')) {
+      smtpHost = 'us1.workspace.org'
     }
 
     const transporter = nodemailer.createTransport({

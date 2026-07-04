@@ -77,7 +77,7 @@ app.post('/api/send', async (req, res) => {
   try {
     let smtpHost = 'smtp.gmail.com'
     if (!userEmail.endsWith('@gmail.com')) {
-      smtpHost = 'us1.workspace.org'
+      smtpHost = 'mail-1.jetorbit.net'
     }
 
     const transporter = nodemailer.createTransport({

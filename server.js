@@ -79,7 +79,10 @@ function getTransporter(email, pass, host, port, secure) {
     },
     tls: {
       rejectUnauthorized: false
-    }
+    },
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 15000
   })
 
   transporterCache.set(cacheKey, transporter)
@@ -114,10 +117,13 @@ async function sendWithRetry(userEmail, userPass, toEmail, subject, htmlBody, at
     mailOptions.attachments = attachments
   }
 
+  const SMTP_TIMEOUT = 15000
+
   if (workingConfigCache.has(userEmail)) {
     const cachedCfg = workingConfigCache.get(userEmail)
     try {
       const transporter = getTransporter(userEmail, cleanPass, cachedCfg.host, cachedCfg.port, cachedCfg.secure)
+      transporter.set('socketTimeout', SMTP_TIMEOUT)
       const info = await transporter.sendMail(mailOptions)
       return { success: true, messageId: info.messageId, usedConfig: cachedCfg }
     } catch (err) {
@@ -130,8 +136,8 @@ async function sendWithRetry(userEmail, userPass, toEmail, subject, htmlBody, at
   for (const cfg of configs) {
     try {
       const transporter = getTransporter(userEmail, cleanPass, cfg.host, cfg.port, cfg.secure)
+      transporter.set('socketTimeout', SMTP_TIMEOUT)
       const info = await transporter.sendMail(mailOptions)
-      
       workingConfigCache.set(userEmail, cfg)
       return { success: true, messageId: info.messageId, usedConfig: cfg }
     } catch (err) {
